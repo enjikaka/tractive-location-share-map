@@ -106,7 +106,7 @@ async function handleIndex (request: Request) {
             marker.setLatLng(L.latLng(data.latitude, data.longitude));
             circle.setLatLng(L.latLng(data.latitude, data.longitude));
             circle.setRadius(data.positionUncertainty);
-            popup.setContent('Batterinivå: \$\{data.batteryLevel\} %. Uppdaterad senast: \$\{new Date(data.time).toISOString()\}');
+            popup.setContent('Batterinivå: '+data.batteryLevel+' %. Uppdaterad senast: ' + new Date(data.time).toISOString();
         });
         </script>
     </body>
