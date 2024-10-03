@@ -154,7 +154,7 @@ async function handleLive (request: Request) {
             eventTarget.addEventListener('location-update', e => {
                 if (e instanceof CustomEvent) {
                     if (e.detail.checksum !== lastEventId) {
-                        controller.enqueue(createEvent('location', { lat: e.detail.lat, long: e.detail.long }, e.detail.checksum));
+                        controller.enqueue(createEvent('location', e.detail, e.detail.checksum));
                     }
                 }
             });
