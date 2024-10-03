@@ -44,10 +44,11 @@ Deno.cron("save esmeralda position", "* * * * *", async () => {
     const latitude = trackerLocation.latlong[0];
     const longitude = trackerLocation.latlong[1];
     const positionUncertainty = trackerLocation.pos_uncertainty;
-    const time = trackerLocation.time;
+    const locationUpdateTime = trackerLocation.time;
+    const batteryUpdateTime = trackerHardware.time;
     const batteryLevel = trackerHardware.battery_level;
 
-    await kv.set(['trackers', 'esmeralda'], { time, latitude, longitude, positionUncertainty, batteryLevel });
+    await kv.set(['trackers', 'esmeralda'], { batteryUpdateTime, locationUpdateTime, latitude, longitude, positionUncertainty, batteryLevel });
 });
 
 const html = String.raw;
@@ -105,7 +106,7 @@ async function handleIndex (request: Request) {
             marker.setLatLng(L.latLng(data.latitude, data.longitude));
             circle.setLatLng(L.latLng(data.latitude, data.longitude));
             circle.setRadius(data.positionUncertainty);
-            popup.setContent('Batterinivå: '+data.batteryLevel+' %.<br>Uppdaterad senast: ' + new Date(data.time * 1000).toLocaleString() + '.<br>Positionens osäkerhet: ' + data.positionUncertainty + ' meter.');
+            popup.setContent('Batterinivå: '+data.batteryLevel+' % ('+new Date(data.batteryUpdateTime * 1000).toLocaleString()+').<br>Positionen uppdaterades senast: ' + new Date(data.locationUpdateTime * 1000).toLocaleString() + '.<br>Positionens osäkerhet: ' + data.positionUncertainty + ' meter.');
         });
         </script>
     </body>
@@ -127,17 +128,11 @@ async function observeLocationUpdates () {
 
     for await (const entries of stream) {
         const { value } = entries.pop();
-
-        const { latitude, longitude, positionUncertainty, time, batteryLevel } = value;
-        const newChecksum = await checksum(time+','+latitude+','+longitude);
+        const newChecksum = await checksum(JSON.stringify(value));
 
         eventTarget.dispatchEvent(new CustomEvent('location-update', {
             detail: {
-                latitude,
-                longitude,
-                positionUncertainty,
-                batteryLevel,
-                time,
+                ...value,
                 checksum: newChecksum
             }
         }));
