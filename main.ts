@@ -39,7 +39,7 @@ Deno.cron("save esmeralda position", "* * * * *", async () => {
     }
 
     const trackerLocation = await tractive.getTrackerLocation(trackerId);
-    const trackerHardware = await tractive.getTrackerLocation(trackerId);
+    const trackerHardware = await tractive.getTrackerHardware(trackerId);
 
     console.log(trackerHardware);
 
