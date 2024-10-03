@@ -95,7 +95,7 @@ async function handleIndex (request: Request) {
         L.control.layers({ "OpenStreetMap": osm, "Lantmäteriet": viss }).addTo(map);
 
         const marker = L.marker([${latitude}, ${longitude}]).addTo(map);
-        const circle = L.circle([${latitude}, ${longitude}], { radius: positionUncertainty }).addTo(map);
+        const circle = L.circle([${latitude}, ${longitude}], { radius: ${positionUncertainty} }).addTo(map);
 
         const eventSource = new EventSource('/live');
 
