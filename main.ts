@@ -38,12 +38,17 @@ Deno.cron("save esmeralda position", "* * * * *", async () => {
         );
     }
 
-    const tracker = await tractive.getTrackerLocation(trackerId);
+    const trackerLocation = await tractive.getTrackerLocation(trackerId);
+    const trackerHardware = await tractive.getTrackerLocation(trackerId);
 
-    const lat = tracker.latlong[0];
-    const long = tracker.latlong[1];
+    console.log(trackerHardware);
 
-    await kv.set(['trackers', 'esmeralda'], [lat, long]);
+    const latitude = trackerLocation.latlong[0];
+    const longitude = trackerLocation.latlong[1];
+    const positionUncertainty = trackerLocation.pos_uncertainty;
+    const time = trackerLocation.time;
+
+    await kv.set(['trackers', 'esmeralda'], { time, latitude, longitude, positionUncertainty });
 });
 
 const html = String.raw;
@@ -54,7 +59,7 @@ const createEvent = (eventName: string, data: Object, id?: string) =>
 async function handleIndex (request: Request) {
     const kv = await Deno.openKv();
     const { value } = await kv.get(['trackers', 'esmeralda']);
-    const [lat, long] = value;
+    const { latitude, longitude, positionUncertainty } = value;
 
     const body = html`
     <!doctype html>
@@ -85,17 +90,20 @@ async function handleIndex (request: Request) {
             detectRetina: true
         });
 
-        const map = L.map('map', { crs: L.CRS.EPSG3857, continuousWorld: true, layers: [osm, viss] }).setView([${lat}, ${long}], 15);
+        const map = L.map('map', { crs: L.CRS.EPSG3857, continuousWorld: true, layers: [osm, viss] }).setView([${latitude}, ${longitude}], 15);
 
         L.control.layers({ "OpenStreetMap": osm, "Lantmäteriet": viss }).addTo(map);
 
-        const marker = L.marker([${lat}, ${long}]).addTo(map);
+        const marker = L.marker([${latitude}, ${longitude}]).addTo(map);
+        const circle = L.circle([${latitude}, ${longitude}], { radius: positionUncertainty }).addTo(map);
 
         const eventSource = new EventSource('/live');
 
         eventSource.addEventListener('location', locationEvent => {
             const data = JSON.parse(locationEvent.data);
-            marker.setLatLng(L.latLng(data.lat, data.long));
+            marker.setLatLng(L.latLng(data.latitude, data.longitude));
+            circle.setLatLng(L.latLng(data.latitude, data.longitude));
+            circle.setRadius(data.positionUncertainty);
         });
         </script>
     </body>
@@ -118,13 +126,15 @@ async function observeLocationUpdates () {
     for await (const entries of stream) {
         const { value } = entries.pop();
 
-        const [lat, long] = value;
-        const newChecksum = await checksum(lat+','+long);
+        const { latitude, longitude, positionUncertainty, time } = value;
+        const newChecksum = await checksum(time+','+latitude+','+longitude);
 
         eventTarget.dispatchEvent(new CustomEvent('location-update', {
             detail: {
-                lat,
-                long,
+                latitude,
+                longitude,
+                positionUncertainty,
+                time,
                 checksum: newChecksum
             }
         }));
