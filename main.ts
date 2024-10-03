@@ -97,6 +97,7 @@ async function handleIndex (request: Request) {
         const marker = L.marker([${latitude}, ${longitude}]).addTo(map);
         const circle = L.circle([${latitude}, ${longitude}], { radius: ${positionUncertainty} }).addTo(map);
         const popup = L.popup().setContent('Batterinivå: ${batteryLevel} %. Uppdaterad senast: ${isoDate}');
+        marker.bindPopup(popup);
 
         const eventSource = new EventSource('/live');
 
