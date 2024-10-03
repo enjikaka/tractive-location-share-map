@@ -58,8 +58,7 @@ const createEvent = (eventName: string, data: Object, id?: string) =>
 async function handleIndex (request: Request) {
     const kv = await Deno.openKv();
     const { value } = await kv.get(['trackers', 'esmeralda']);
-    const { latitude, longitude, positionUncertainty, batteryLevel, time } = value;
-    const isoDate = new Date(time * 1000).toISOString();
+    const { latitude, longitude, positionUncertainty } = value;
 
     const body = html`
     <!doctype html>
@@ -96,7 +95,7 @@ async function handleIndex (request: Request) {
 
         const marker = L.marker([${latitude}, ${longitude}]).addTo(map);
         const circle = L.circle([${latitude}, ${longitude}], { radius: ${positionUncertainty} }).addTo(map);
-        const popup = L.popup().setContent('Batterinivå: ${batteryLevel} %. Uppdaterad senast: ${isoDate}');
+        const popup = L.popup();
         marker.bindPopup(popup);
 
         const eventSource = new EventSource('/live');
@@ -106,7 +105,7 @@ async function handleIndex (request: Request) {
             marker.setLatLng(L.latLng(data.latitude, data.longitude));
             circle.setLatLng(L.latLng(data.latitude, data.longitude));
             circle.setRadius(data.positionUncertainty);
-            popup.setContent('Batterinivå: '+data.batteryLevel+' %. Uppdaterad senast: ' + new Date(data.time * 1000).toISOString());
+            popup.setContent('Batterinivå: '+data.batteryLevel+' %. Uppdaterad senast: ' + new Date(data.time * 1000).toLocaleString());
         });
         </script>
     </body>
