@@ -41,14 +41,13 @@ Deno.cron("save esmeralda position", "* * * * *", async () => {
     const trackerLocation = await tractive.getTrackerLocation(trackerId);
     const trackerHardware = await tractive.getTrackerHardware(trackerId);
 
-    console.log(trackerHardware);
-
     const latitude = trackerLocation.latlong[0];
     const longitude = trackerLocation.latlong[1];
     const positionUncertainty = trackerLocation.pos_uncertainty;
     const time = trackerLocation.time;
+    const batteryLevel = trackerHardware.battery_level;
 
-    await kv.set(['trackers', 'esmeralda'], { time, latitude, longitude, positionUncertainty });
+    await kv.set(['trackers', 'esmeralda'], { time, latitude, longitude, positionUncertainty, batteryLevel });
 });
 
 const html = String.raw;
@@ -59,7 +58,8 @@ const createEvent = (eventName: string, data: Object, id?: string) =>
 async function handleIndex (request: Request) {
     const kv = await Deno.openKv();
     const { value } = await kv.get(['trackers', 'esmeralda']);
-    const { latitude, longitude, positionUncertainty } = value;
+    const { latitude, longitude, positionUncertainty, batteryLevel, time } = value;
+    const isoDate = new Date(time).toISOString();
 
     const body = html`
     <!doctype html>
@@ -96,6 +96,7 @@ async function handleIndex (request: Request) {
 
         const marker = L.marker([${latitude}, ${longitude}]).addTo(map);
         const circle = L.circle([${latitude}, ${longitude}], { radius: ${positionUncertainty} }).addTo(map);
+        const popup = L.popup().setContent('Batterinivå: ${batteryLevel} %. Uppdaterad senast: ${isoDate}');
 
         const eventSource = new EventSource('/live');
 
@@ -104,6 +105,7 @@ async function handleIndex (request: Request) {
             marker.setLatLng(L.latLng(data.latitude, data.longitude));
             circle.setLatLng(L.latLng(data.latitude, data.longitude));
             circle.setRadius(data.positionUncertainty);
+            popup.setContent('Batterinivå: \$\{data.batteryLevel\} %. Uppdaterad senast: \$\{new Date(data.time).toISOString()\}');
         });
         </script>
     </body>
@@ -126,7 +128,7 @@ async function observeLocationUpdates () {
     for await (const entries of stream) {
         const { value } = entries.pop();
 
-        const { latitude, longitude, positionUncertainty, time } = value;
+        const { latitude, longitude, positionUncertainty, time, batteryLevel } = value;
         const newChecksum = await checksum(time+','+latitude+','+longitude);
 
         eventTarget.dispatchEvent(new CustomEvent('location-update', {
@@ -134,6 +136,7 @@ async function observeLocationUpdates () {
                 latitude,
                 longitude,
                 positionUncertainty,
+                batteryLevel,
                 time,
                 checksum: newChecksum
             }
