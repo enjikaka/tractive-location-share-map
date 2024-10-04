@@ -11,7 +11,7 @@ async function checksum (data: string) {
 
 const eventTarget = new EventTarget();
 
-Deno.cron("save esmeralda position", "* * * * *", async () => {
+Deno.cron("save esmeralda position", "*/30 * * * *", async () => {
     const kv = await Deno.openKv();
     const isAuthorized = tractive.isAuthenticated();
 
