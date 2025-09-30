@@ -11,7 +11,7 @@ async function checksum (data: string) {
 
 const eventTarget = new EventTarget();
 
-Deno.cron("save esmeralda position", "*/30 * * * *", async () => {
+Deno.cron("save trackers position", "*/30 * * * *", async () => {
     const kv = await Deno.openKv();
     const isAuthorized = tractive.isAuthenticated();
 
@@ -64,7 +64,8 @@ async function handleIndex (request: Request) {
     const kv = await Deno.openKv();
     const trackerIds = Deno.env.get('TRACTIVE_TRACKER_ID').split(',');
     const { value } = await kv.get(['trackers']);
-    // const { latitude, longitude, positionUncertainty } = value;
+    const { value: esmeraldaTracker } = await kv.get(['trackers', trackerIds[0]]);
+    const { latitude, longitude, positionUncertainty } = esmeraldaTracker;
 
     const body = html`
     <!doctype html>
