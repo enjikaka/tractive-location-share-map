@@ -51,7 +51,7 @@ async function saveTrackersPosition () {
         const trackerLocation = await tractive.getTrackerLocation(_trackerId);
         const trackerHardware = await tractive.getTrackerHardware(_trackerId);
 
-        if (trackerLocation && trackerHardware) {
+        if (trackerLocation && trackerHardware && trackerLocation.latlong) {
             const name = _trackerNames[trackerIds.indexOf(_trackerId)];
             const id = _trackerId;
             const latitude = trackerLocation.latlong[0];
