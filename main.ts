@@ -64,8 +64,6 @@ async function handleIndex (request: Request) {
     const kv = await Deno.openKv();
     const trackerIds = Deno.env.get('TRACTIVE_TRACKER_ID').split(',');
     const { value } = await kv.get(['trackers']);
-    const { value: esmeraldaTracker } = await kv.get(['trackers', trackerIds[0]]);
-    const { latitude, longitude, positionUncertainty } = esmeraldaTracker;
 
     const body = html`
     <!doctype html>
@@ -103,8 +101,8 @@ async function handleIndex (request: Request) {
 
         L.control.layers({ "OpenStreetMap": osm, "Lantmäteriet": viss }).addTo(map);
 
-        const marker = L.marker([${latitude}, ${longitude}]).addTo(map);
-        const circle = L.circle([${latitude}, ${longitude}], { radius: ${positionUncertainty} }).addTo(map);
+        const marker = L.marker(0,0]).addTo(map);
+        const circle = L.circle([0, 0], { radius: 0 }).addTo(map);
         const popup = L.popup();
         marker.bindPopup(popup);
 
