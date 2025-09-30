@@ -297,6 +297,18 @@ function handleLive(request: Request) {
 
 saveTrackersPosition().catch(console.error);
 
+async function deleteEsmerelda() {
+    const kv = await Deno.openKv();
+
+    try {
+        await kv.delete(["trackers", "esmerelda"]);
+    } catch (error) {
+        console.error(`Error deleting esmerelda: ${error}`);
+    }
+}
+
+deleteEsmerelda();
+
 Deno.serve((req: Request) => {
     const url = new URL(req.url);
 
