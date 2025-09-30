@@ -68,61 +68,67 @@ async function saveTrackersPosition() {
     const trackerIds = trackerId.split(",");
     const _trackerNames = trackerNames.split(",");
 
-    for (const _trackerId of trackerIds) {
-        console.log(`Getting tracker location and hardware for ${_trackerId}`);
+    const trackers = trackerIds.map((trackerId, index) => ({
+        id: trackerId,
+        name: _trackerNames[index],
+    }));
 
-        try {
-            const trackerLocation = await new Promise<TrackerLocation | null>((resolve) => {
-                tractive.getTrackerLocation(_trackerId)
-                    .then(resolve)
-                    .catch((error: unknown) => {
-                        console.error(
-                            `Error getting tracker location for ${_trackerId}: ${error}`,
-                        );
-                        resolve(null);
-                    });
-            });
-            
-            const trackerHardware = await new Promise<TrackerHardware | null>((resolve) => {
-                tractive.getTrackerHardware(_trackerId)
-                    .then(resolve)
-                    .catch((error: unknown) => {
-                        console.error(
-                            `Error getting tracker hardware for ${_trackerId}: ${error}`,
-                        );
-                        resolve(null);
-                    });
-            });
+    await Promise.all(trackers.map(obj => fetchAndSaveTracker(obj, kv)));
+}
 
-            if (trackerLocation && trackerHardware && 
-                trackerLocation.latlong && trackerLocation.pos_uncertainty !== undefined && 
-                trackerLocation.time !== undefined && trackerHardware.time !== undefined && 
-                trackerHardware.battery_level !== undefined) {
-                const name = _trackerNames[trackerIds.indexOf(_trackerId)];
-                const id = _trackerId;
-                const latitude = trackerLocation.latlong[0];
-                const longitude = trackerLocation.latlong[1];
-                const positionUncertainty = trackerLocation.pos_uncertainty;
-                const locationUpdateTime = trackerLocation.time;
-                const batteryUpdateTime = trackerHardware.time;
-                const batteryLevel = trackerHardware.battery_level;
-
-                await kv.set(["trackers", _trackerId], {
-                    id,
-                    name,
-                    batteryUpdateTime,
-                    locationUpdateTime,
-                    latitude,
-                    longitude,
-                    positionUncertainty,
-                    batteryLevel,
+async function fetchAndSaveTracker (tracker: { id: string; name: string }, kv: Deno.Kv) {
+    console.log(`Getting tracker location and hardware for ${tracker.id}`);
+    try {
+        const trackerLocation = await new Promise<TrackerLocation | null>((resolve) => {
+            tractive.getTrackerLocation(tracker.id)
+                .then(resolve)
+                .catch((error: unknown) => {
+                    console.error(
+                        `Error getting tracker location for ${tracker.id}: ${error}`,
+                    );
+                    resolve(null);
                 });
-            }
-        } catch (error) {
-            console.error(
-                `Error getting tracker location and hardware for ${_trackerId}: ${error}`,
-            );
+        });
+        
+        const trackerHardware = await new Promise<TrackerHardware | null>((resolve) => {
+            tractive.getTrackerHardware(tracker.id)
+                .then(resolve)
+                .catch((error: unknown) => {
+                    console.error(
+                        `Error getting tracker hardware for ${tracker.id}: ${error}`,
+                    );
+                    resolve(null);
+                });
+        });
+
+        if (trackerLocation && trackerHardware && 
+            trackerLocation.latlong && trackerLocation.pos_uncertainty !== undefined && 
+            trackerLocation.time !== undefined && trackerHardware.time !== undefined && 
+            trackerHardware.battery_level !== undefined) {
+            const name = tracker.name;
+            const id = tracker.id;
+            const latitude = trackerLocation.latlong[0];
+            const longitude = trackerLocation.latlong[1];
+            const positionUncertainty = trackerLocation.pos_uncertainty;
+            const locationUpdateTime = trackerLocation.time;
+            const batteryUpdateTime = trackerHardware.time;
+            const batteryLevel = trackerHardware.battery_level;
+
+            await kv.set(["trackers", tracker.id], {
+                id,
+                name,
+                batteryUpdateTime,
+                locationUpdateTime,
+                latitude,
+                longitude,
+                positionUncertainty,
+                batteryLevel,
+            });
         }
+    } catch (error) {
+        console.error(
+            `Error getting tracker location and hardware for ${_trackerId}: ${error}`,
+        );
     }
 }
 
@@ -289,7 +295,7 @@ function handleLive(request: Request) {
     });
 }
 
-// saveTrackersPosition().catch(console.error);
+saveTrackersPosition().catch(console.error);
 
 Deno.serve((req: Request) => {
     const url = new URL(req.url);
