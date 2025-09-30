@@ -208,7 +208,7 @@ async function handleIndex(_request: Request) {
                     markers[tracker.id] = { marker, circle, popup };
                 }
 
-                const eventSourceURL = '/live?trackerIds=' + window.gpsTrackers.map(x => x.id).join(',');
+                const eventSourceURL = '/live?trackerIds=' + window.gpsTrackers.map(x => x.id).filter(Boolean).join(',');
                 const eventSource = new EventSource(eventSourceURL);
 
                 eventSource.addEventListener('location', locationEvent => {
