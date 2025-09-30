@@ -51,16 +51,21 @@ async function saveTrackersPosition () {
         const trackerLocation = await tractive.getTrackerLocation(_trackerId);
         const trackerHardware = await tractive.getTrackerHardware(_trackerId);
 
-        const name = _trackerNames[trackerIds.indexOf(_trackerId)];
-        const id = _trackerId;
-        const latitude = trackerLocation.latlong[0];
-        const longitude = trackerLocation.latlong[1];
-        const positionUncertainty = trackerLocation.pos_uncertainty;
-        const locationUpdateTime = trackerLocation.time;
-        const batteryUpdateTime = trackerHardware.time;
-        const batteryLevel = trackerHardware.battery_level;
+        if (trackerLocation && trackerHardware) {
+            const name = _trackerNames[trackerIds.indexOf(_trackerId)];
+            const id = _trackerId;
+            const latitude = trackerLocation.latlong[0];
+            const longitude = trackerLocation.latlong[1];
+            const positionUncertainty = trackerLocation.pos_uncertainty;
+            const locationUpdateTime = trackerLocation.time;
+            const batteryUpdateTime = trackerHardware.time;
+            const batteryLevel = trackerHardware.battery_level;
 
-        await kv.set(['trackers', _trackerId], { id, name, batteryUpdateTime, locationUpdateTime, latitude, longitude, positionUncertainty, batteryLevel });
+            await kv.set(['trackers', _trackerId], { id, name, batteryUpdateTime, locationUpdateTime, latitude, longitude, positionUncertainty, batteryLevel });
+        }
+        else {
+            console.log(`Tracker ${_trackerId} not found.`);
+        }
     }
 }
 
