@@ -127,7 +127,7 @@ async function fetchAndSaveTracker (tracker: { id: string; name: string }, kv: D
         }
     } catch (error) {
         console.error(
-            `Error getting tracker location and hardware for ${_trackerId}: ${error}`,
+            `Error getting tracker location and hardware for ${tracker.id}: ${error}`,
         );
     }
 }
@@ -144,12 +144,23 @@ const createEvent = (eventName: string, data: object, id?: string) =>
 
 async function handleIndex(_request: Request) {
     const kv = await Deno.openKv();
-    const entries = kv.list({ prefix: ["trackers"] });
+    const entries = kv.list<{
+        id: string,
+        name: string | undefined,
+        batteryUpdateTime: number,
+        locationUpdateTime: number,
+        latitude: number,
+        longitude: number,
+        positionUncertainty: number,
+        batteryLevel: number,
+    }>({ prefix: ["trackers"] });
 
     const trackers = [];
 
     for await (const entry of entries) {
-        trackers.push(entry.value);
+        if (entry.value.name !== undefined) {
+            trackers.push(entry.value);
+        }
     }
 
     const body = html`
@@ -301,7 +312,7 @@ async function deleteEsmerelda() {
     const kv = await Deno.openKv();
 
     try {
-        await kv.delete(["trackers", "esmerelda"]);
+        await kv.delete(["trackers", "esmeralda"]);
     } catch (error) {
         console.error(`Error deleting esmerelda: ${error}`);
     }
