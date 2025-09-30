@@ -71,7 +71,7 @@ const textEncoder = new TextEncoder();
 const createEvent = (eventName: string, data: Object, id?: string) =>
   textEncoder.encode((id ? `id: ${id}\n` : '') + `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`);
 
-async function handleIndex (request: Request) {
+async function handleIndex (_request: Request) {
     const kv = await Deno.openKv();
     const entries = kv.list({ prefix: ["trackers"] });
 
