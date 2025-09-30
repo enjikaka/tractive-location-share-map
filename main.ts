@@ -38,17 +38,21 @@ Deno.cron("save esmeralda position", "*/30 * * * *", async () => {
         );
     }
 
-    const trackerLocation = await tractive.getTrackerLocation(trackerId);
-    const trackerHardware = await tractive.getTrackerHardware(trackerId);
+    const trackerIds = trackerId.split(',');
 
-    const latitude = trackerLocation.latlong[0];
-    const longitude = trackerLocation.latlong[1];
-    const positionUncertainty = trackerLocation.pos_uncertainty;
-    const locationUpdateTime = trackerLocation.time;
-    const batteryUpdateTime = trackerHardware.time;
-    const batteryLevel = trackerHardware.battery_level;
+    for (const _trackerId of trackerIds) {
+        const trackerLocation = await tractive.getTrackerLocation(_trackerId);
+        const trackerHardware = await tractive.getTrackerHardware(_trackerId);
 
-    await kv.set(['trackers', 'esmeralda'], { batteryUpdateTime, locationUpdateTime, latitude, longitude, positionUncertainty, batteryLevel });
+        const latitude = trackerLocation.latlong[0];
+        const longitude = trackerLocation.latlong[1];
+        const positionUncertainty = trackerLocation.pos_uncertainty;
+        const locationUpdateTime = trackerLocation.time;
+        const batteryUpdateTime = trackerHardware.time;
+        const batteryLevel = trackerHardware.battery_level;
+
+        await kv.set(['trackers', _trackerId], { batteryUpdateTime, locationUpdateTime, latitude, longitude, positionUncertainty, batteryLevel });
+    }
 });
 
 const html = String.raw;
@@ -58,8 +62,9 @@ const createEvent = (eventName: string, data: Object, id?: string) =>
 
 async function handleIndex (request: Request) {
     const kv = await Deno.openKv();
-    const { value } = await kv.get(['trackers', 'esmeralda']);
-    const { latitude, longitude, positionUncertainty } = value;
+    const trackerIds = Deno.env.get('TRACTIVE_TRACKER_ID').split(',');
+    const { value } = await kv.get(['trackers']);
+    // const { latitude, longitude, positionUncertainty } = value;
 
     const body = html`
     <!doctype html>
@@ -67,17 +72,20 @@ async function handleIndex (request: Request) {
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Vart är Esmeralda?</title>
-        <meta name="description" content="Hitta henne med GPSen!">
+        <title>Vart är djuret?</title>
+        <meta name="description" content="Hitta det med GPSen!">
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
         <style>
         header {font-family:-system-ui,sans-serif; position: absolute; top: 0; left: 0; right: 0; height: 48px;display:grid;place-items: center;background-color: purple;color: white; font-weight: bold}
         #map {position: absolute; top: 48px; left: 0; right: 0; bottom: 0 }
         </style>
+        <script>
+            const trackers = JSON.parse(${JSON.stringify(value)});
+        </script>
     </head>
     <body>
-        <header>Vart är Esmeralda?</header>
+        <header>Vart är djuret?</header>
         <div id="map"></div>
         <script>
         const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
