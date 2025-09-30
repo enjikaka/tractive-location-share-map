@@ -126,9 +126,7 @@ async function saveTrackersPosition() {
     }
 }
 
-Deno.cron("save trackers position", "*/30 * * * *", () => {
-    saveTrackersPosition().catch(console.error);
-});
+Deno.cron("save trackers position", "*/30 * * * *", saveTrackersPosition);
 
 const html = String.raw;
 const textEncoder = new TextEncoder();
@@ -291,7 +289,7 @@ function handleLive(request: Request) {
     });
 }
 
-saveTrackersPosition().catch(console.error);
+// saveTrackersPosition().catch(console.error);
 
 Deno.serve((req: Request) => {
     const url = new URL(req.url);
