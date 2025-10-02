@@ -124,7 +124,7 @@ async function handleIndex(_request: Request) {
             <head>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Vart är djuret?</title>
+                <title>Var är djuret?</title>
                 <meta name="description" content="Hitta det med GPSen!">
                 <link
                     rel="stylesheet"
@@ -144,7 +144,7 @@ async function handleIndex(_request: Request) {
                 </script>
             </head>
             <body>
-                <header>Vart är djuret?</header>
+                <header>Var är djuret?</header>
                 <div id="map"></div>
                 <script type="module" src="js/app.js"></script>
             </body>
