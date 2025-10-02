@@ -12,7 +12,7 @@ const viss = new TileLayer.WMS('https://mapslantmateriet.havochvatten.se/topoweb
     detectRetina: true
 });
 
-const map = new Map('map', { crs: L.CRS.EPSG3857, continuousWorld: true, layers: [osm, viss] }).setView([0, 0], 15);
+const map = new Map('map', { crs: L.CRS.EPSG3857, continuousWorld: true, layers: [osm] }).setView([0, 0], 15);
 
 new Control.Layers({ "OpenStreetMap": osm, "Lantmäteriet": viss }).addTo(map);
 
