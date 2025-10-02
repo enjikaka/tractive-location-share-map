@@ -135,9 +135,6 @@ async function handleIndex(_request: Request) {
                 header {font-family:-system-ui,sans-serif; position: absolute; top: 0; left: 0; right: 0; height: 48px;display:grid;place-items: center;background-color: purple;color: white; font-weight: bold}
                 #map {position: absolute; top: 48px; left: 0; right: 0; bottom: 0 }
                 </style>
-                <script>
-                window.gpsTrackers = ${JSON.stringify(trackers)};
-                </script>
                 <script type="importmap">
                     {
                         "imports": {
@@ -172,6 +169,9 @@ async function observeLocationUpdates(trackerIds: string[]) {
             const entry = entries.pop();
             if (!entry) continue;
             const { value } = entry;
+
+            if (!value) continue;
+
             const newChecksum = await checksum(JSON.stringify(value));
 
             eventTarget.dispatchEvent(
@@ -186,17 +186,30 @@ async function observeLocationUpdates(trackerIds: string[]) {
     }
 }
 
-function handleLive(request: Request) {
+async function handleLive(request: Request) {
+    const db = await Deno.openKv();
+
     const lastEventId = request.headers.get("Last-Event-ID") ?? undefined;
 
-    const trackerIds =
-        new URL(request.url).searchParams.get("trackerIds")?.split(",") ?? [];
+    const trackerIds = Deno.env.get("TRACTIVE_TRACKER_ID")?.split(",") ?? [];
     observeLocationUpdates(trackerIds);
 
     let handleLocationUpdate: ((e: Event) => void) | null = null;
 
     const body = new ReadableStream<Uint8Array>({
         start: (controller) => {
+            (async () => {
+                for (const trackerId of trackerIds) {
+                    const entry = await db.get(["trackers", trackerId]);
+
+                    if (entry && entry.value) {
+                        const newChecksum = await checksum(JSON.stringify(entry.value));
+
+                        controller.enqueue(createEvent("location", entry.value, newChecksum));
+                    }
+                }
+            })();
+
             handleLocationUpdate = (e: Event) => {
                 if (e instanceof CustomEvent) {
                     if (e.detail.checksum !== lastEventId) {

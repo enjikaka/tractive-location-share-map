@@ -133,6 +133,11 @@ export class Tractive {
         const positionReport = await this.#authorizedFetch(
             `/device_pos_report/${trackerId}`,
         );
+
+        if (!positionReport) {
+            throw new Error("No location data found");
+        }
+
         const address = await this.#authorizedFetch(
             `/platform/geo/address/location?latitude=${encodeURIComponent(positionReport.latlong[0])
             }&longitude=${encodeURIComponent(positionReport.latlong[1])}`,
