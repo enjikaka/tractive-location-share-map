@@ -18,8 +18,6 @@ async function saveTrackersPosition() {
 
     const email = Deno.env.get("TRACTIVE_ACCOUNT_EMAIL");
     const password = Deno.env.get("TRACTIVE_ACCOUNT_PASSWORD");
-    const trackerId = Deno.env.get("TRACTIVE_TRACKER_ID");
-    const trackerNames = Deno.env.get("TRACTIVE_TRACKER_NAMES");
 
     if (!email) {
         throw new ReferenceError("TRACTIVE_ACCOUNT_EMAIL not set.");
@@ -29,22 +27,16 @@ async function saveTrackersPosition() {
         throw new ReferenceError("TRACTIVE_ACCOUNT_PASSWORD not set.");
     }
 
-    if (!trackerId) {
-        throw new ReferenceError("TRACTIVE_TRACKER_ID not set.");
-    }
-
-    if (!trackerNames) {
-        throw new ReferenceError("TRACTIVE_TRACKER_NAMES not set.");
-    }
-
     const tractive = new Tractive(Deno.env.get("TRACTIVE_ACCOUNT_EMAIL")!, Deno.env.get("TRACTIVE_ACCOUNT_PASSWORD")!);
 
-    const trackerIds = trackerId.split(",");
-    const _trackerNames = trackerNames.split(",");
+    const objects = await tractive.getTrackableObjects();
 
-    const trackers = trackerIds.map((trackerId, index) => ({
-        id: trackerId,
-        name: _trackerNames[index],
+    console.log('objects', objects);
+    const fullObjects = await Promise.all(objects.map(object => tractive.getTrackableObject(object._id)));
+
+    const trackers = fullObjects.map((object) => ({
+        id: object.device_id,
+        name: object.details.name,
     }));
 
     await Promise.all(trackers.map(obj => fetchAndSaveTracker(obj, kv, tractive)));
