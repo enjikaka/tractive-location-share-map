@@ -12,15 +12,20 @@ interface KVTracker {
   readonly batteryLevel: number;
 }
 
+interface KVHistory {
+  readonly id: string;
+  readonly latlngs: number[][];
+  readonly latestUpdateTime: number | null;
+}
+
+const html = String.raw;
+const textEncoder = new TextEncoder();
+
 async function checksum(data: string) {
   const encodedData = textEncoder.encode(data);
   const hashBuffer = await crypto.subtle.digest("SHA-1", encodedData.buffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join(
-    "",
-  );
-
-  return hashHex;
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 const eventTarget = new EventTarget();
@@ -31,6 +36,12 @@ const tractive = new Tractive(
 const watcherKv = await Deno.openKv();
 const activeLocationWatchers = new Set<string>();
 const activeHistoryWatchers = new Set<string>();
+
+const getLocationEventId = (value: KVTracker) =>
+  `location:${value.id}:${value.locationUpdateTime}:${value.batteryUpdateTime}`;
+
+const getHistoryEventId = (value: KVHistory) =>
+  `history:${value.id}:${value.latestUpdateTime ?? 0}:${value.latlngs.length}`;
 
 async function saveTrackersPosition() {
   const email = Deno.env.get("TRACTIVE_ACCOUNT_EMAIL");
@@ -79,9 +90,16 @@ async function fetchAndSaveTracker(
       new Date(Date.now()),
     );
 
+    const flattenedHistory = histories.flat();
+    const latestUpdateTime = flattenedHistory.reduce(
+      (max, entry) => Math.max(max, entry.time ?? 0),
+      0,
+    );
+
     const compressedHistory = {
       id: tracker.id,
-      latlngs: histories.flat().map((entry) => entry.latlong),
+      latlngs: flattenedHistory.map((entry) => entry.latlong),
+      latestUpdateTime: flattenedHistory.length > 0 ? latestUpdateTime : null,
     };
 
     await kv.set(["histories", tracker.id], compressedHistory);
@@ -134,8 +152,6 @@ async function fetchAndSaveTracker(
 
 Deno.cron("save trackers position", "*/30 * * * *", saveTrackersPosition);
 
-const html = String.raw;
-const textEncoder = new TextEncoder();
 const createEvent = (eventName: string, data: object, id?: string) =>
   textEncoder.encode(
     (id ? `id: ${id}\n` : "") +
@@ -223,13 +239,14 @@ function observeLocationUpdates(trackerIds: string[]) {
 
           if (!value) continue;
 
-          const newChecksum = await checksum(JSON.stringify(value));
+          const payload = value as KVTracker;
+          const eventId = await checksum(getLocationEventId(payload));
 
           eventTarget.dispatchEvent(
             new CustomEvent("location-update", {
               detail: {
-                ...(value as object),
-                checksum: newChecksum,
+                value: payload,
+                eventId,
               },
             }),
           );
@@ -263,13 +280,14 @@ function observeHistoryUpdates(trackerIds: string[]) {
 
           if (!value) continue;
 
-          const newChecksum = await checksum(JSON.stringify(value));
+          const payload = value as KVHistory;
+          const eventId = await checksum(getHistoryEventId(payload));
 
           eventTarget.dispatchEvent(
             new CustomEvent("history-update", {
               detail: {
-                ...(value as object),
-                checksum: newChecksum,
+                value: payload,
+                eventId,
               },
             }),
           );
@@ -301,9 +319,9 @@ async function handleLive(request: Request) {
   const body = new ReadableStream<Uint8Array>({
     start: (controller) => {
       async function sendInitialLocationUpdate(kvTracker: KVTracker) {
-        const newChecksum = await checksum(JSON.stringify(kvTracker));
+        const eventId = await checksum(getLocationEventId(kvTracker));
 
-        controller.enqueue(createEvent("location", kvTracker, newChecksum));
+        controller.enqueue(createEvent("location", kvTracker, eventId));
       }
 
       (async () => {
@@ -314,7 +332,7 @@ async function handleLive(request: Request) {
               historyEntry,
             ] = await Promise.all([
               db.get<KVTracker>(["trackers", trackerId]),
-              db.get<{ id: string; latlngs: unknown[] }>([
+              db.get<KVHistory>([
                 "histories",
                 trackerId,
               ]),
@@ -325,7 +343,12 @@ async function handleLive(request: Request) {
             }
 
             if (historyEntry && historyEntry.value) {
-              controller.enqueue(createEvent("history", historyEntry.value));
+              const historyEventId = await checksum(
+                getHistoryEventId(historyEntry.value),
+              );
+              controller.enqueue(
+                createEvent("history", historyEntry.value, historyEventId),
+              );
             }
           }),
         );
@@ -333,15 +356,19 @@ async function handleLive(request: Request) {
 
       handleHistoryUpdate = (e: Event) => {
         if (e instanceof CustomEvent) {
-          if (e.detail.checksum !== lastEventId) {
+          const { eventId, value } = e.detail as {
+            eventId: string;
+            value: KVHistory;
+          };
+          if (eventId !== lastEventId) {
             try {
               // Check if the controller is still open before enqueuing
               if (controller.desiredSize !== null) {
                 controller.enqueue(
                   createEvent(
                     "history",
-                    e.detail,
-                    e.detail.checksum,
+                    value,
+                    eventId,
                   ),
                 );
               }
@@ -362,15 +389,19 @@ async function handleLive(request: Request) {
 
       handleLocationUpdate = (e: Event) => {
         if (e instanceof CustomEvent) {
-          if (e.detail.checksum !== lastEventId) {
+          const { eventId, value } = e.detail as {
+            eventId: string;
+            value: KVTracker;
+          };
+          if (eventId !== lastEventId) {
             try {
               // Check if the controller is still open before enqueuing
               if (controller.desiredSize !== null) {
                 controller.enqueue(
                   createEvent(
                     "location",
-                    e.detail,
-                    e.detail.checksum,
+                    value,
+                    eventId,
                   ),
                 );
               }
