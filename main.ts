@@ -92,8 +92,10 @@ async function fetchAndSaveTracker(
   }
 
   try {
-    const trackerLocation = await tractive.getTrackerLocation(tracker.id);
-    const trackerHardware = await tractive.getTrackerHardware(tracker.id);
+    const [trackerLocation, trackerHardware] = await Promise.all([
+      tractive.getTrackerLocation(tracker.id),
+      tractive.getTrackerHardware(tracker.id),
+    ]);
 
     if (
       trackerLocation && trackerHardware &&
@@ -304,23 +306,29 @@ async function handleLive(request: Request) {
         controller.enqueue(createEvent("location", kvTracker, newChecksum));
       }
 
-      async function sendTrackerHistory(trackerId: string) {
-        const entry = await db.get<KVTracker>(["histories", trackerId]);
-
-        if (entry && entry.value) {
-          controller.enqueue(createEvent("history", entry.value));
-        }
-      }
-
       (async () => {
-        for (const trackerId of trackerIds) {
-          const entry = await db.get<KVTracker>(["trackers", trackerId]);
+        await Promise.all(
+          trackerIds.map(async (trackerId) => {
+            const [
+              trackerEntry,
+              historyEntry,
+            ] = await Promise.all([
+              db.get<KVTracker>(["trackers", trackerId]),
+              db.get<{ id: string; latlngs: unknown[] }>([
+                "histories",
+                trackerId,
+              ]),
+            ]);
 
-          if (entry && entry.value) {
-            await sendInitialLocationUpdate(entry.value);
-            await sendTrackerHistory(trackerId);
-          }
-        }
+            if (trackerEntry && trackerEntry.value) {
+              await sendInitialLocationUpdate(trackerEntry.value);
+            }
+
+            if (historyEntry && historyEntry.value) {
+              controller.enqueue(createEvent("history", historyEntry.value));
+            }
+          }),
+        );
       })();
 
       handleHistoryUpdate = (e: Event) => {
