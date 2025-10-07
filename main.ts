@@ -1,4 +1,4 @@
-import { serveFile } from '@std/http/file-server';
+import { serveFile } from "@std/http/file-server";
 import { Tractive } from "./services/tractive.ts";
 
 interface KVTracker {
@@ -28,6 +28,9 @@ const tractive = new Tractive(
   Deno.env.get("TRACTIVE_ACCOUNT_EMAIL")!,
   Deno.env.get("TRACTIVE_ACCOUNT_PASSWORD")!,
 );
+const watcherKv = await Deno.openKv();
+const activeLocationWatchers = new Set<string>();
+const activeHistoryWatchers = new Set<string>();
 
 async function saveTrackersPosition() {
   const email = Deno.env.get("TRACTIVE_ACCOUNT_EMAIL");
@@ -77,11 +80,11 @@ async function fetchAndSaveTracker(
     );
 
     const compressedHistory = {
-        id: tracker.id,
-        latlngs: histories.flat().map(entry => entry.latlong)
-    }
+      id: tracker.id,
+      latlngs: histories.flat().map((entry) => entry.latlong),
+    };
 
-    await kv.set(['histories', tracker.id], compressedHistory);
+    await kv.set(["histories", tracker.id], compressedHistory);
   } catch (error) {
     console.error(
       `Error getting tracker history ${tracker.id}: ${error}`,
@@ -200,60 +203,82 @@ async function handleIndex(_request: Request) {
   });
 }
 
-async function observeLocationUpdates(trackerIds: string[]) {
-  const db = await Deno.openKv();
+function observeLocationUpdates(trackerIds: string[]) {
+  for (const rawId of trackerIds) {
+    const trackerId = rawId.trim();
+    if (!trackerId || activeLocationWatchers.has(trackerId)) continue;
 
-  for (const trackerId of trackerIds) {
-    const stream = db.watch([["trackers", trackerId]]);
+    activeLocationWatchers.add(trackerId);
 
-    for await (const entries of stream) {
-      const entry = entries.pop();
-      if (!entry) continue;
-      const { value } = entry;
+    void (async () => {
+      try {
+        const stream = watcherKv.watch([["trackers", trackerId]]);
 
-      if (!value) continue;
+        for await (const entries of stream) {
+          const entry = entries.pop();
+          if (!entry) continue;
+          const { value } = entry;
 
-      const newChecksum = await checksum(JSON.stringify(value));
+          if (!value) continue;
 
-      eventTarget.dispatchEvent(
-        new CustomEvent("location-update", {
-          detail: {
-            ...(value as object),
-            checksum: newChecksum,
-          },
-        }),
-      );
-    }
+          const newChecksum = await checksum(JSON.stringify(value));
+
+          eventTarget.dispatchEvent(
+            new CustomEvent("location-update", {
+              detail: {
+                ...(value as object),
+                checksum: newChecksum,
+              },
+            }),
+          );
+        }
+      } catch (error) {
+        console.error(
+          `Location watcher for ${trackerId} stopped: ${error}`,
+        );
+      } finally {
+        activeLocationWatchers.delete(trackerId);
+      }
+    })();
   }
 }
 
-async function observeHistoryUpdates(trackerIds: string[]) {
-  const db = await Deno.openKv();
+function observeHistoryUpdates(trackerIds: string[]) {
+  for (const rawId of trackerIds) {
+    const trackerId = rawId.trim();
+    if (!trackerId || activeHistoryWatchers.has(trackerId)) continue;
 
-  for (const trackerId of trackerIds) {
-    const stream = db.watch([["histories", trackerId]]);
+    activeHistoryWatchers.add(trackerId);
 
-    for await (const entries of stream) {
-      const entry = entries.pop();
-      if (!entry) continue;
-      const { value } = entry;
+    void (async () => {
+      try {
+        const stream = watcherKv.watch([["histories", trackerId]]);
 
-      if (!value) continue;
+        for await (const entries of stream) {
+          const entry = entries.pop();
+          if (!entry) continue;
+          const { value } = entry;
 
-      const newChecksum = await checksum(JSON.stringify(value));
+          if (!value) continue;
 
-      eventTarget.dispatchEvent(
-        new CustomEvent("history-update", {
-          detail: {
-            ...(value as object),
-            checksum: newChecksum,
-          },
-        }),
-      );
-    }
+          const newChecksum = await checksum(JSON.stringify(value));
+
+          eventTarget.dispatchEvent(
+            new CustomEvent("history-update", {
+              detail: {
+                ...(value as object),
+                checksum: newChecksum,
+              },
+            }),
+          );
+        }
+      } catch (error) {
+        console.error(`History watcher for ${trackerId} stopped: ${error}`);
+      } finally {
+        activeHistoryWatchers.delete(trackerId);
+      }
+    })();
   }
-
-  await db.close();
 }
 
 async function handleLive(request: Request) {
@@ -261,7 +286,10 @@ async function handleLive(request: Request) {
 
   const lastEventId = request.headers.get("Last-Event-ID") ?? undefined;
 
-  const trackerIds = Deno.env.get("TRACTIVE_TRACKER_ID")?.split(",") ?? [];
+  const trackerIds = (Deno.env.get("TRACTIVE_TRACKER_ID") ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
   observeLocationUpdates(trackerIds);
   observeHistoryUpdates(trackerIds);
 
@@ -423,7 +451,7 @@ Deno.serve((req: Request) => {
   }
 
   if (url.pathname.includes("/js/") || url.pathname.includes("/css/")) {
-    return serveFile(req, Deno.cwd() + '/static' + url.pathname);
+    return serveFile(req, Deno.cwd() + "/static" + url.pathname);
   }
 
   return handleIndex(req);
