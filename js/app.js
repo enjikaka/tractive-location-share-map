@@ -1,4 +1,4 @@
-import L, { Map, Control, TileLayer, Marker, Circle, Popup, LatLng } from 'leaflet';
+import L, { Polyline, Map, Control, TileLayer, Marker, Circle, Popup, LatLng } from 'leaflet';
 
 let hasPanned = false;
 
@@ -18,6 +18,8 @@ new Control.Layers({ "OpenStreetMap": osm, "Lantmäteriet": viss }).addTo(map);
 
 const markers = {};
 
+const historyPaths = {};
+
 function getOrCreateMarkerForTracker (tracker) {
     if (markers[tracker.id]) {
         return markers[tracker.id];
@@ -31,6 +33,22 @@ function getOrCreateMarkerForTracker (tracker) {
     markers[tracker.id] = { marker, circle, popup };
 
     return markers[tracker.id];
+}
+
+function getOrCreateHistoryPathForTracker (history) {
+    if (historyPaths[history.id]) {
+        return historyPaths[history.id];
+    }
+
+    console.log(history);
+
+    const path = new Polyline(history.latlngs, { color: 'red' });
+
+    path.addTo(map);
+
+    historyPaths[history.id] = path;
+
+    return getOrCreateHistoryPathForTracker;
 }
 
 const eventSourceURL = '/live';
@@ -52,4 +70,10 @@ eventSource.addEventListener('location', locationEvent => {
         map.panTo(coords);
         hasPanned = true;
     }
+});
+
+
+eventSource.addEventListener('history', historyEvent => {
+    const data = JSON.parse(historyEvent.data);
+    getOrCreateHistoryPathForTracker(data);
 });

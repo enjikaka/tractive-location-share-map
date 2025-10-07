@@ -1,3 +1,16 @@
+export type TrackerHistoryResponse = TrackerHistory[][]
+
+export interface TrackerHistory {
+  time: number
+  latlong: number[]
+  alt: number
+  speed?: number
+  course?: number
+  pos_uncertainty: number
+  sensor_used: 'KNOWN_WIFI' | 'GPS'
+}
+
+
 export interface TrackableObject {
   _id: string;
   _version: string;
@@ -131,16 +144,25 @@ export class Tractive {
   #email: string;
   #password: string;
   #accountDetails: { token: string; uid: string } | null;
-  #authentication: Promise<void>;
+  #authentication: Promise<void> | null = null;
+  #API_BASE_URL = "https://graph.tractive.com/4";
 
   constructor(email: string, password: string) {
     this.#email = email;
     this.#password = password;
     this.#accountDetails = null;
-    this.#authentication = this.authenticate();
   }
 
-  async #authorizedFetch(url: string) {
+  login(): Promise<void> {
+    this.#authentication = this.authenticate();
+    return this.#authentication;
+  }
+
+  async #authorizedFetch(path: string) {
+    if (!path) {
+      throw new Error("Path is required");
+    }
+
     await this.#authentication;
 
     if (!this.isAuthenticated()) {
@@ -153,9 +175,15 @@ export class Tractive {
     headers.set("Authorization", `Bearer ${this.#accountDetails!.token}`);
     headers.set("Content-Type", "application/json");
 
-    const response = await fetch("https://graph.tractive.com/4" + url, {
+    const url = new URL(this.#API_BASE_URL + path);
+
+    const response = await fetch(url.toString(), {
       headers,
     });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ${path}: ${response.statusText}`);
+    }
 
     return response.json();
   }
@@ -166,7 +194,7 @@ export class Tractive {
   }
 
   async authenticate() {
-    const url = new URL("https://graph.tractive.com/4/auth/token");
+    const url = new URL(this.#API_BASE_URL + "/auth/token");
 
     url.searchParams.set("grant_type", "tractive");
     url.searchParams.set("platform_email", this.#email);
@@ -232,5 +260,21 @@ export class Tractive {
 
   getTrackerHardware(trackerId: string): Promise<TrackerHardwareResponse> {
     return this.#authorizedFetch(`/device_hw_report/${trackerId}`);
+  }
+
+  getTrackerHistory(trackerId: string, from: Date, to: Date): Promise<TrackerHistoryResponse> {
+    const adjustDate = (date: Date) => {
+      return (date.getTime() / 1000).toFixed(0);
+    }
+    const timeFrom = adjustDate(from);
+    const timeTo = adjustDate(to);
+
+    const searchParams = new URLSearchParams();
+
+    searchParams.set("time_from", timeFrom);
+    searchParams.set("time_to", timeTo);
+    searchParams.set("format", "json_segments");
+
+    return this.#authorizedFetch(`/tracker/${trackerId}/positions?${searchParams.toString()}`);
   }
 }
