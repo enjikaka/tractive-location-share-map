@@ -1,3 +1,4 @@
+import { serveFile } from '@std/http/file-server';
 import { Tractive } from "./services/tractive.ts";
 
 interface KVTracker {
@@ -67,6 +68,26 @@ async function fetchAndSaveTracker(
   tractive: Tractive,
 ) {
   console.log(`Getting tracker location and hardware for ${tracker.id}`);
+
+  try {
+    const histories = await tractive.getTrackerHistory(
+      tracker.id,
+      new Date(Date.now() - 86_400_000), // minus 24h
+      new Date(Date.now()),
+    );
+
+    const compressedHistory = {
+        id: tracker.id,
+        latlngs: histories.flat().map(entry => entry.latlong)
+    }
+
+    await kv.set(['histories', tracker.id], compressedHistory);
+  } catch (error) {
+    console.error(
+      `Error getting tracker history ${tracker.id}: ${error}`,
+    );
+  }
+
   try {
     const trackerLocation = await tractive.getTrackerLocation(tracker.id);
     const trackerHardware = await tractive.getTrackerHardware(tracker.id);
@@ -159,7 +180,8 @@ async function handleIndex(_request: Request) {
         <script type="importmap">
         {
           "imports": {
-            "leaflet": "https://unpkg.com/leaflet@2.0.0-alpha.1/dist/leaflet.js"
+            "leaflet": "https://unpkg.com/leaflet@2.0.0-alpha.1/dist/leaflet.js",
+            "webact": "https://unpkg.com/webact@0.2.23/index.js"
           }
         }
         </script>
@@ -167,6 +189,7 @@ async function handleIndex(_request: Request) {
       <body>
         <header>Var är djuret?</header>
         <div id="map"></div>
+        <div id="cards"></div>
         <script type="module" src="js/app.js"></script>
       </body>
     </html>
@@ -207,6 +230,35 @@ async function observeLocationUpdates(trackerIds: string[]) {
   }
 }
 
+async function observeHistoryUpdates(trackerIds: string[]) {
+  const db = await Deno.openKv();
+
+  for (const trackerId of trackerIds) {
+    const stream = db.watch([["histories", trackerId]]);
+
+    for await (const entries of stream) {
+      const entry = entries.pop();
+      if (!entry) continue;
+      const { value } = entry;
+
+      if (!value) continue;
+
+      const newChecksum = await checksum(JSON.stringify(value));
+
+      eventTarget.dispatchEvent(
+        new CustomEvent("history-update", {
+          detail: {
+            ...(value as object),
+            checksum: newChecksum,
+          },
+        }),
+      );
+    }
+  }
+
+  await db.close();
+}
+
 async function handleLive(request: Request) {
   const db = await Deno.openKv();
 
@@ -214,8 +266,10 @@ async function handleLive(request: Request) {
 
   const trackerIds = Deno.env.get("TRACTIVE_TRACKER_ID")?.split(",") ?? [];
   observeLocationUpdates(trackerIds);
+  observeHistoryUpdates(trackerIds);
 
   let handleLocationUpdate: ((e: Event) => void) | null = null;
+  let handleHistoryUpdate: ((e: Event) => void) | null = null;
 
   const body = new ReadableStream<Uint8Array>({
     start: (controller) => {
@@ -225,20 +279,12 @@ async function handleLive(request: Request) {
         controller.enqueue(createEvent("location", kvTracker, newChecksum));
       }
 
-      async function sendTrackerHistory(kvTracker: KVTracker) {
-        await tractive.login();
-        const histories = await tractive.getTrackerHistory(
-          kvTracker.id,
-          new Date(Date.now() - 86_400_000), // minus 24h
-          new Date(Date.now()),
-        );
+      async function sendTrackerHistory(trackerId: string) {
+        const entry = await db.get<KVTracker>(["histories", trackerId]);
 
-        const compressedHistory = {
-            id: kvTracker.id,
-            latlngs: histories.flat().map(entry => entry.latlong)
+        if (entry && entry.value) {
+          controller.enqueue(createEvent("history", entry.value));
         }
-
-        controller.enqueue(createEvent("history", compressedHistory));
       }
 
       (async () => {
@@ -247,10 +293,39 @@ async function handleLive(request: Request) {
 
           if (entry && entry.value) {
             await sendInitialLocationUpdate(entry.value);
-            await sendTrackerHistory(entry.value);
+            await sendTrackerHistory(trackerId);
           }
         }
       })();
+
+      handleHistoryUpdate = (e: Event) => {
+        if (e instanceof CustomEvent) {
+          if (e.detail.checksum !== lastEventId) {
+            try {
+              // Check if the controller is still open before enqueuing
+              if (controller.desiredSize !== null) {
+                controller.enqueue(
+                  createEvent(
+                    "history",
+                    e.detail,
+                    e.detail.checksum,
+                  ),
+                );
+              }
+            } catch (error) {
+              console.error("Error enqueuing data:", error);
+              // Remove the event listener if there's an error
+              if (handleHistoryUpdate) {
+                eventTarget.removeEventListener(
+                  "history-update",
+                  handleHistoryUpdate,
+                );
+                handleHistoryUpdate = null;
+              }
+            }
+          }
+        }
+      };
 
       handleLocationUpdate = (e: Event) => {
         if (e instanceof CustomEvent) {
@@ -282,6 +357,7 @@ async function handleLive(request: Request) {
       };
 
       eventTarget.addEventListener("location-update", handleLocationUpdate);
+      eventTarget.addEventListener("history-update", handleHistoryUpdate);
 
       // Handle abort signal when client disconnects
       request.signal.addEventListener("abort", () => {
@@ -292,6 +368,15 @@ async function handleLive(request: Request) {
           );
           handleLocationUpdate = null;
         }
+
+        if (handleHistoryUpdate) {
+          eventTarget.removeEventListener(
+            "history-update",
+            handleHistoryUpdate,
+          );
+          handleHistoryUpdate = null;
+        }
+
         try {
           controller.close();
         } catch (_error) {
@@ -301,6 +386,14 @@ async function handleLive(request: Request) {
     },
     cancel: () => {
       // Clean up when the stream is cancelled
+      if (handleHistoryUpdate) {
+        eventTarget.removeEventListener(
+          "history-update",
+          handleHistoryUpdate,
+        );
+        handleHistoryUpdate = null;
+      }
+
       if (handleLocationUpdate) {
         eventTarget.removeEventListener(
           "location-update",
@@ -332,15 +425,8 @@ Deno.serve((req: Request) => {
     return handleLive(req);
   }
 
-  if (url.pathname === "/js/app.js") {
-    return new Response(
-      Deno.readFileSync(new URL("js/app.js", import.meta.url)),
-      {
-        headers: new Headers({
-          "content-type": "text/javascript",
-        }),
-      },
-    );
+  if (url.pathname.includes("/js/")) {
+    return serveFile(req, Deno.cwd() + url.pathname);
   }
 
   return handleIndex(req);

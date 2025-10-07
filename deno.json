@@ -1,5 +1,8 @@
 {
   "tasks": {
     "start": "deno run --allow-env --env-file --allow-net --unstable-cron --unstable-kv --allow-read main.ts"
+  },
+  "imports": {
+    "@std/http": "jsr:@std/http@^1.0.21"
   }
 }
