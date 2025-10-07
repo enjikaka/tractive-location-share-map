@@ -173,10 +173,7 @@ async function handleIndex(_request: Request) {
           href="https://unpkg.com/leaflet@2.0.0-alpha.1/dist/leaflet.css"
           crossorigin=""
         />
-        <style>
-        header {font-family:-system-ui,sans-serif; position: absolute; top: 0; left: 0; right: 0; height: 48px;display:grid;place-items: center;background-color: purple;color: white; font-weight: bold}
-        #map {position: absolute; top: 48px; left: 0; right: 0; bottom: 0 }
-        </style>
+        <link rel="stylesheet" href="css/main.css" />
         <script type="importmap">
         {
           "imports": {
@@ -189,7 +186,7 @@ async function handleIndex(_request: Request) {
       <body>
         <header>Var är djuret?</header>
         <div id="map"></div>
-        <div id="cards"></div>
+        <dialog id="cards"></dialog>
         <script type="module" src="js/app.js"></script>
       </body>
     </html>
@@ -425,8 +422,8 @@ Deno.serve((req: Request) => {
     return handleLive(req);
   }
 
-  if (url.pathname.includes("/js/")) {
-    return serveFile(req, Deno.cwd() + url.pathname);
+  if (url.pathname.includes("/js/") || url.pathname.includes("/css/")) {
+    return serveFile(req, Deno.cwd() + '/static' + url.pathname);
   }
 
   return handleIndex(req);

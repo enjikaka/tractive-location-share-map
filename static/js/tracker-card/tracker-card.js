@@ -1,8 +1,11 @@
 import { registerFunctionComponent } from 'webact';
 
 
-function TrackerCard () {
+async function TrackerCard () {
     const { useCSS, useHTML, postRender } = this;
+
+    await useHTML();
+    await useCSS();
 
     postRender(() => {
         
@@ -11,5 +14,5 @@ function TrackerCard () {
 
 export default registerFunctionComponent(TrackerCard, {
     name: 'tracker-card',
-    meta: import.meta.url
+    metaUrl: import.meta.url
 });

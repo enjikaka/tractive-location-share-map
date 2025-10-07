@@ -22,9 +22,17 @@ const markers = {};
 const historyPaths = {};
 const cards = {};
 
-const $cards = document.querySelector('#cards');;
+const $cards = document.querySelector('#cards');
 
-function getOrCreateCard (tracker) {
+$cards.addEventListener("click", (e) => {
+    if (e.target === $cards) {
+        $cards.close();
+    }
+});
+
+const openCards = () => $cards.showModal();
+
+function getOrCreateCard(tracker) {
     if (cards[tracker.id]) {
         return cards[tracker.id];
     }
@@ -40,7 +48,7 @@ function getOrCreateCard (tracker) {
     `;
 
     trackerCard.id = tracker.id;
-    
+
     $cards.appendChild(trackerCard);
 
     cards[tracker.id] = trackerCard;
@@ -51,7 +59,11 @@ function getOrCreateMarkerForTracker(tracker) {
         return markers[tracker.id];
     }
 
-    const marker = new Marker([tracker.latitude, tracker.longitude]).addTo(map);
+    const marker = new Marker([tracker.latitude, tracker.longitude]);
+
+    marker.on('click', openCards);
+
+    marker.addTo(map);
     const circle = new Circle([tracker.latitude, tracker.longitude], { radius: tracker.positionUncertainty }).addTo(map);
     markers[tracker.id] = { marker, circle };
 
