@@ -5,7 +5,7 @@ import type {
   TrackerHistoryResponse,
   TrackerLocationResponse,
   TrackerResponse,
-} from "./tractive.types";
+} from "./tractive.types.ts";
 
 export class Tractive {
   #clientId = "6536c228870a3c8857d452e8";
@@ -130,10 +130,14 @@ export class Tractive {
     return this.#authorizedFetch(`/device_hw_report/${trackerId}`);
   }
 
-  getTrackerHistory(trackerId: string, from: Date, to: Date): Promise<TrackerHistoryResponse> {
+  getTrackerHistory(
+    trackerId: string,
+    from: Date,
+    to: Date,
+  ): Promise<TrackerHistoryResponse> {
     const adjustDate = (date: Date) => {
       return (date.getTime() / 1000).toFixed(0);
-    }
+    };
     const timeFrom = adjustDate(from);
     const timeTo = adjustDate(to);
 
@@ -143,6 +147,8 @@ export class Tractive {
     searchParams.set("time_to", timeTo);
     searchParams.set("format", "json_segments");
 
-    return this.#authorizedFetch(`/tracker/${trackerId}/positions?${searchParams.toString()}`);
+    return this.#authorizedFetch(
+      `/tracker/${trackerId}/positions?${searchParams.toString()}`,
+    );
   }
 }

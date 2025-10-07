@@ -1,9 +1,9 @@
 {
-	"name": "Node.js & TypeScript",
-	"image": "mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm",
-	"features": {
-	  "ghcr.io/devcontainers-community/features/deno:1": {
-		"version": "2.5.0"
-	  }
-	}
+  "name": "Node.js & TypeScript",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm",
+  "features": {
+    "ghcr.io/devcontainers-community/features/deno:1": {
+      "version": "2.5.3"
+    }
+  }
 }
