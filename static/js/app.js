@@ -41,6 +41,7 @@ function getOrCreateCard(tracker) {
 
     trackerCard.innerHTML = `
         <span slot="name">${tracker.name}</span>
+        <span slot="distance">0</span>
         <span slot="batteryLevel">${tracker.batteryLevel}</span>
         <span slot="batteryUpdateTime">${new Date(tracker.batteryUpdateTime * 1000).toLocaleString()}</span>
         <span slot="locationUpdateTime">${new Date(tracker.locationUpdateTime * 1000).toLocaleString()}</span>
@@ -74,7 +75,7 @@ function updateOrCreateHistoryPathForTracker(history) {
     if (historyPaths[history.id]) {
         const path = historyPaths[history.id];
 
-        path.setLatLngs(data.latlngs);
+        path.setLatLngs(history.latlngs);
         path.redraw();
 
         return path;
@@ -122,4 +123,14 @@ eventSource.addEventListener('location', locationEvent => {
 eventSource.addEventListener('history', historyEvent => {
     const data = JSON.parse(historyEvent.data);
     updateOrCreateHistoryPathForTracker(data);
+
+    const trackerCard = document.getElementById(data.id);
+
+    if (trackerCard) {
+        const distanceSlot = trackerCard.querySelector('[slot="distance"]');
+
+        if (distanceSlot) {
+            distanceSlot.textContent = (data.distance / 1000).toFixed(2); // meters to kilometers
+        }
+    }
 });

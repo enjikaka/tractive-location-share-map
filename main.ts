@@ -102,16 +102,39 @@ async function fetchAndSaveTracker(
       new Date(Date.now()),
     );
 
-    const flattenedHistory = histories.flat();
+    const flattenedHistory = histories
+      .flat()
+      .sort((a, b) => ((a.time ?? 0) - (b.time ?? 0)));
+    const latlngs = flattenedHistory.map((entry) => entry.latlong);
     const latestUpdateTime = flattenedHistory.reduce(
       (max, entry) => Math.max(max, entry.time ?? 0),
       0,
     );
 
+    const distance = latlngs.reduce((total, curr, index, arr) => {
+      if (index === 0) return 0;
+      const prev = arr[index - 1];
+      const R = 6371e3; // metres
+      const φ1 = (prev[0] * Math.PI) / 180; // φ, λ in radians
+      const φ2 = (curr[0] * Math.PI) / 180;
+      const Δφ = ((curr[0] - prev[0]) * Math.PI) / 180;
+      const Δλ = ((curr[1] - prev[1]) * Math.PI) / 180;
+
+      const a =
+        Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+        Math.cos(φ1) * Math.cos(φ2) *
+        Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+      const d = R * c; // in metres
+      return total + d;
+    }, 0);
+
     const compressedHistory = {
       id: tracker.id,
-      latlngs: flattenedHistory.map((entry) => entry.latlong),
+      latlngs,
       latestUpdateTime: flattenedHistory.length > 0 ? latestUpdateTime : null,
+      distance,
     };
 
     await kv.set(["histories", tracker.id], compressedHistory);
