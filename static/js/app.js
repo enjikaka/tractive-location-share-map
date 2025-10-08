@@ -1,4 +1,4 @@
-import L, { Polyline, Map, Control, TileLayer, Marker, Circle, Popup, LatLng } from 'leaflet';
+import L, { Polyline, Map, Control, TileLayer, Marker, Circle, LatLng } from 'leaflet';
 
 import './tracker-card/tracker-card.js';
 
@@ -93,14 +93,22 @@ eventSource.addEventListener('location', locationEvent => {
     const data = JSON.parse(locationEvent.data);
 
     getOrCreateCard(data);
-    const { marker, circle, popup } = getOrCreateMarkerForTracker(data);
+    const { marker, circle } = getOrCreateMarkerForTracker(data);
 
     const coords = new LatLng(data.latitude, data.longitude);
 
     marker.setLatLng(coords);
     circle.setLatLng(coords);
     circle.setRadius(data.positionUncertainty);
-    // popup.setContent('Namn: ' + data.name + '<br>Batterinivå: ' + data.batteryLevel + ' % (' + new Date(data.batteryUpdateTime * 1000).toLocaleString() + ').<br>Positionen uppdaterades senast: ' + new Date(data.locationUpdateTime * 1000).toLocaleString() + '.<br>Positionens osäkerhet: ' + data.positionUncertainty + ' meter.');
+
+    const trackerCard = document.getElementById(data.id);
+
+    if (trackerCard) {
+        trackerCard.querySelector('[slot="batteryLevel"]').textContent = data.batteryLevel;
+        trackerCard.querySelector('[slot="batteryUpdateTime"]').textContent = new Date(data.batteryUpdateTime * 1000).toLocaleString();
+        trackerCard.querySelector('[slot="locationUpdateTime"]').textContent = new Date(data.locationUpdateTime * 1000).toLocaleString();
+        trackerCard.querySelector('[slot="positionUncertainty"]').textContent = data.positionUncertainty;
+    }
 
     if (!hasPanned) {
         map.panTo(coords);
