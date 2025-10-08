@@ -22,6 +22,8 @@ export class Tractive {
   }
 
   login(): Promise<void> {
+    if (this.#authentication) return this.#authentication;
+    
     this.#authentication = this.authenticate();
     return this.#authentication;
   }

@@ -18,6 +18,17 @@ interface KVHistory {
   readonly latestUpdateTime: number | null;
 }
 
+const email = Deno.env.get("TRACTIVE_ACCOUNT_EMAIL");
+const password = Deno.env.get("TRACTIVE_ACCOUNT_PASSWORD");
+
+if (!email) {
+  throw new ReferenceError("TRACTIVE_ACCOUNT_EMAIL not set.");
+}
+
+if (!password) {
+  throw new ReferenceError("TRACTIVE_ACCOUNT_PASSWORD not set.");
+}
+
 const html = String.raw;
 const textEncoder = new TextEncoder();
 
@@ -43,20 +54,8 @@ const getLocationEventId = (value: KVTracker) =>
 const getHistoryEventId = (value: KVHistory) =>
   `history:${value.id}:${value.latestUpdateTime ?? 0}:${value.latlngs.length}`;
 
-async function saveTrackersPosition() {
-  const email = Deno.env.get("TRACTIVE_ACCOUNT_EMAIL");
-  const password = Deno.env.get("TRACTIVE_ACCOUNT_PASSWORD");
-
-  if (!email) {
-    throw new ReferenceError("TRACTIVE_ACCOUNT_EMAIL not set.");
-  }
-
-  if (!password) {
-    throw new ReferenceError("TRACTIVE_ACCOUNT_PASSWORD not set.");
-  }
-
+async function updateTrackers() {
   await tractive.login();
-
   const objects = await tractive.getTrackableObjects();
 
   const fullObjects = await Promise.all(
@@ -71,16 +70,29 @@ async function saveTrackersPosition() {
   const kv = await Deno.openKv();
 
   await Promise.all(
-    trackers.map((obj) => fetchAndSaveTracker(obj, kv, tractive)),
+    trackers.map((obj) => fetchAndSaveTracker(obj, kv)),
   )
     .finally(() => kv.close());
 }
 
 async function fetchAndSaveTracker(
   tracker: { id: string; name: string },
-  kv: Deno.Kv,
-  tractive: Tractive,
+  kv: Deno.Kv
 ) {
+  const existingEntry = await kv.get<KVTracker>(["trackers", tracker.id]);
+
+  if (existingEntry.value && existingEntry.value.locationUpdateTime) {
+    const age = Date.now() - (existingEntry.value.locationUpdateTime * 1000);
+
+    if (age < 1_800_000) { // 30 minutes
+      console.log(
+        `Skipping tracker ${tracker.id}, last update was les than 30 minutes ago.`,
+      );
+
+      return;
+    }
+  }
+
   console.log(`Getting tracker location and hardware for ${tracker.id}`);
 
   try {
@@ -150,8 +162,6 @@ async function fetchAndSaveTracker(
   }
 }
 
-Deno.cron("save trackers position", "*/30 * * * *", saveTrackersPosition);
-
 const createEvent = (eventName: string, data: object, id?: string) =>
   textEncoder.encode(
     (id ? `id: ${id}\n` : "") +
@@ -160,16 +170,7 @@ const createEvent = (eventName: string, data: object, id?: string) =>
 
 async function handleIndex(_request: Request) {
   const kv = await Deno.openKv();
-  const entries = kv.list<{
-    id: string;
-    name: string | undefined;
-    batteryUpdateTime: number;
-    locationUpdateTime: number;
-    latitude: number;
-    longitude: number;
-    positionUncertainty: number;
-    batteryLevel: number;
-  }>({ prefix: ["trackers"] });
+  const entries = kv.list<KVTracker>({ prefix: ["trackers"] });
 
   const trackers = [];
 
@@ -302,6 +303,8 @@ function observeHistoryUpdates(trackerIds: string[]) {
 }
 
 async function handleLive(request: Request) {
+  updateTrackers();
+  
   const db = await Deno.openKv();
 
   const lastEventId = request.headers.get("Last-Event-ID") ?? undefined;
@@ -479,8 +482,6 @@ async function handleLive(request: Request) {
     }),
   });
 }
-
-saveTrackersPosition().catch(console.error);
 
 Deno.serve((req: Request) => {
   const url = new URL(req.url);
