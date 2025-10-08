@@ -70,12 +70,15 @@ function getOrCreateMarkerForTracker(tracker) {
     return markers[tracker.id];
 }
 
-function getOrCreateHistoryPathForTracker(history) {
+function updateOrCreateHistoryPathForTracker(history) {
     if (historyPaths[history.id]) {
-        return historyPaths[history.id];
-    }
+        const path = historyPaths[history.id];
 
-    console.log(history);
+        path.setLatLngs(data.latlngs);
+        path.redraw();
+
+        return path;
+    }
 
     const path = new Polyline(history.latlngs, { color: 'red' });
 
@@ -83,7 +86,7 @@ function getOrCreateHistoryPathForTracker(history) {
 
     historyPaths[history.id] = path;
 
-    return getOrCreateHistoryPathForTracker;
+    return path;
 }
 
 const eventSourceURL = '/live';
@@ -118,5 +121,5 @@ eventSource.addEventListener('location', locationEvent => {
 
 eventSource.addEventListener('history', historyEvent => {
     const data = JSON.parse(historyEvent.data);
-    getOrCreateHistoryPathForTracker(data);
+    updateOrCreateHistoryPathForTracker(data);
 });
