@@ -8,4 +8,4 @@ USER deno
 
 ADD . .
 
-CMD ["run", "--allow-net", "--allow-read", "main.ts"]
+CMD ["run", "--allow-net", "--allow-read", "--allow-env", "main.ts"]
