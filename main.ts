@@ -188,7 +188,7 @@ async function fetchAndSaveTracker(
 const createEvent = (eventName: string, data: object, id?: string) =>
   textEncoder.encode(
     (id ? `id: ${id}\n` : "") +
-      `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`,
+    `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`,
   );
 
 async function handleIndex(_request: Request) {
@@ -327,7 +327,7 @@ function observeHistoryUpdates(trackerIds: string[]) {
 
 async function handleLive(request: Request) {
   updateTrackers();
-  
+
   const db = await Deno.openKv();
 
   const lastEventId = request.headers.get("Last-Event-ID") ?? undefined;
@@ -497,11 +497,11 @@ async function handleLive(request: Request) {
   return new Response(body, {
     status: 200,
     headers: new Headers({
-      "Connection": "Keep-Alive",
-      "Content-Type": "text/event-stream",
+      "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache",
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "X-Accel-Buffering": "no",
     }),
   });
 }
