@@ -1,6 +1,6 @@
 FROM denoland/deno:alpine-2.7.9
 
-# ENV TINI_SUBREAPER=true
+ENV TINI_SUBREAPER=true
 
 EXPOSE 5000
 WORKDIR /app
