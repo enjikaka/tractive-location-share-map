@@ -326,7 +326,9 @@ function observeHistoryUpdates(trackerIds: string[]) {
 }
 
 async function handleLive(request: Request) {
-  updateTrackers();
+  void updateTrackers().catch((e) => {
+  console.error("updateTrackers failed", e);
+});
 
   const db = await Deno.openKv();
 
