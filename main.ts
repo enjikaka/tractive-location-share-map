@@ -341,43 +341,68 @@ async function handleLive(request: Request) {
 
   let handleLocationUpdate: ((e: Event) => void) | null = null;
   let handleHistoryUpdate: ((e: Event) => void) | null = null;
+  let interval: number;
 
   const body = new ReadableStream<Uint8Array>({
     start: (controller) => {
+      let closed = false;
+
+      const safeEnqueue = (chunk: Uint8Array) => {
+        if (closed) return;
+
+        try {
+          controller.enqueue(chunk);
+        } catch (e) {
+          console.error("enqueue failed", e);
+          closed = true;
+          try { controller.close(); } catch { }
+        }
+      };
+
+      interval = setInterval(() => {
+        safeEnqueue(textEncoder.encode(`: keepalive\n\n`));
+      }, 15000);
+
       async function sendInitialLocationUpdate(kvTracker: KVTracker) {
         const eventId = await checksum(getLocationEventId(kvTracker));
 
-        controller.enqueue(createEvent("location", kvTracker, eventId));
+        safeEnqueue(createEvent("location", kvTracker, eventId));
       }
 
       (async () => {
-        await Promise.all(
-          trackerIds.map(async (trackerId) => {
-            const [
-              trackerEntry,
-              historyEntry,
-            ] = await Promise.all([
-              db.get<KVTracker>(["trackers", trackerId]),
-              db.get<KVHistory>([
-                "histories",
-                trackerId,
-              ]),
-            ]);
+        try {
+          await Promise.all(
+            trackerIds.map(async (trackerId) => {
+              const [
+                trackerEntry,
+                historyEntry,
+              ] = await Promise.all([
+                db.get<KVTracker>(["trackers", trackerId]),
+                db.get<KVHistory>([
+                  "histories",
+                  trackerId,
+                ]),
+              ]);
 
-            if (trackerEntry && trackerEntry.value) {
-              await sendInitialLocationUpdate(trackerEntry.value);
-            }
+              if (trackerEntry && trackerEntry.value) {
+                await sendInitialLocationUpdate(trackerEntry.value);
+              }
 
-            if (historyEntry && historyEntry.value) {
-              const historyEventId = await checksum(
-                getHistoryEventId(historyEntry.value),
-              );
-              controller.enqueue(
-                createEvent("history", historyEntry.value, historyEventId),
-              );
-            }
-          }),
-        );
+              if (historyEntry && historyEntry.value) {
+                const historyEventId = await checksum(
+                  getHistoryEventId(historyEntry.value),
+                );
+                safeEnqueue(
+                  createEvent("history", historyEntry.value, historyEventId),
+                );
+              }
+            }),
+          );
+        } catch (error) {
+          console.error("initial send failed", error);
+          closed = true;
+          try { controller.close(); } catch { }
+        }
       })();
 
       handleHistoryUpdate = (e: Event) => {
@@ -388,16 +413,13 @@ async function handleLive(request: Request) {
           };
           if (eventId !== lastEventId) {
             try {
-              // Check if the controller is still open before enqueuing
-              if (controller.desiredSize !== null) {
-                controller.enqueue(
-                  createEvent(
-                    "history",
-                    value,
-                    eventId,
-                  ),
-                );
-              }
+              safeEnqueue(
+                createEvent(
+                  "history",
+                  value,
+                  eventId,
+                ),
+              );
             } catch (error) {
               console.error("Error enqueuing data:", error);
               // Remove the event listener if there's an error
@@ -421,16 +443,13 @@ async function handleLive(request: Request) {
           };
           if (eventId !== lastEventId) {
             try {
-              // Check if the controller is still open before enqueuing
-              if (controller.desiredSize !== null) {
-                controller.enqueue(
-                  createEvent(
-                    "location",
-                    value,
-                    eventId,
-                  ),
-                );
-              }
+              safeEnqueue(
+                createEvent(
+                  "location",
+                  value,
+                  eventId,
+                ),
+              );
             } catch (error) {
               console.error("Error enqueuing data:", error);
               // Remove the event listener if there's an error
@@ -451,6 +470,10 @@ async function handleLive(request: Request) {
 
       // Handle abort signal when client disconnects
       request.signal.addEventListener("abort", () => {
+        closed = true;
+
+        clearInterval(interval);
+
         if (handleLocationUpdate) {
           eventTarget.removeEventListener(
             "location-update",
