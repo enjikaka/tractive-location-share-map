@@ -8,4 +8,4 @@ USER deno
 
 ADD . .
 
-CMD ["run", "--unstable-kv" , "--allow-net", "--allow-read", "--allow-env", "main.ts"]
+CMD ["run", "--allow-env", "--env-file", "--allow-net", "--unstable-cron", "--unstable-kv", "--allow-read", "main.ts"]
