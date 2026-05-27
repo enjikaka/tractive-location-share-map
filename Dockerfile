@@ -1,4 +1,4 @@
-FROM denoland/deno:alpine-2.7.9
+FROM denoland/deno:alpine-2.8.0
 
 ENV TINI_SUBREAPER=true
 
